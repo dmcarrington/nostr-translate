@@ -1,11 +1,15 @@
 {
   "name": "nostr-translate-demo",
   "version": "1.0.0",
-  "description": "Demo Nostr client for testing translation service",
+  "description": "Nostr inline translation demo",
   "type": "module",
   "scripts": {
-    "dev": "npx serve .",
-    "preview": "npx serve ."
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.2.0"
   },
   "keywords": ["nostr", "translation", "demo"],
   "license": "MIT"
