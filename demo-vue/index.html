@@ -333,12 +333,23 @@
     console.log('[Init] userLang from localStorage:', userLang);
     setUserLanguage(userLang);
 
-    // Event listeners
-    document.getElementById('user-lang').addEventListener('change', (e) => {
-      console.log('[Change] Language to:', e.target.value);
-      setUserLanguage(e.target.value);
-      render();
-    });
+    // Event listeners - debug version
+    const langSelect = document.getElementById('user-lang');
+    if (langSelect) {
+      console.log('[Init] Found language select element');
+      langSelect.addEventListener('change', (e) => {
+        console.log('[Change] Event fired! Value:', e.target.value);
+        console.log('[Change] setUserLanguage function exists:', typeof setUserLanguage);
+        console.log('[Change] render function exists:', typeof render);
+        
+        setUserLanguage(e.target.value);
+        console.log('[Change] After setUserLanguage, userLang:', userLang);
+        render();
+        console.log('[Change] Render completed');
+      });
+    } else {
+      console.error('[Init] Language select element NOT FOUND');
+    }
 
     // Initial render
     console.log('[Init] Calling render()...');
