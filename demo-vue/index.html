@@ -314,8 +314,19 @@
           badge.dataset.eventId = event.id;
           badge.innerHTML = `${getFlag(sourceLang)} ${capitalize(sourceLang)}`;
           badge.title = `Tap to toggle translation between ${capitalize(sourceLang)} and ${capitalize(userLang)}`;
+          badge.style.display = 'inline-flex';
+          badge.style.alignItems = 'center';
+          badge.style.gap = '0.25em';
+          badge.style.padding = '0.15em 0.4em';
+          badge.style.borderRadius = '0.2em';
+          badge.style.backgroundColor = 'rgba(0, 122, 255, 0.1)';
+          badge.style.color = '#007AFF';
+          badge.style.fontSize = '0.75em';
+          badge.style.cursor = 'pointer';
+          badge.style.userSelect = 'none';
           console.log(`[Render] Badge innerHTML: ${badge.innerHTML}`);
           console.log(`[Render] Badge class: ${badge.className}`);
+          console.log(`[Render] Badge styles applied`);
           
           badge.addEventListener('click', () => {
             toggleTranslation(event.id);
