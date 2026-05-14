@@ -161,35 +161,49 @@
       return `${eventId}:${lang}`;
     }
 
-    function translateText(text, targetLang, sourceLang) {
-      const mock = {
-        'es': { 
-          'La reunión es a las 3pm mañana en el centro de la ciudad. ¿Vas a ir?': 'The meeting is at 3pm tomorrow at the city center. Are you going?',
-          'La reunión es': 'The meeting is',
-          '¿Vas a ir?': 'Are you going?',
-          'centro de la ciudad': 'city center' 
-        },
-        'it': { 'Ciao a tutti! Questa è una demo di traduzione automatica su Nostr.': 'Hello everyone! This is an automatic translation demo on Nostr.', 'Ciao a tutti': 'Hello everyone', 'demo di traduzione': 'translation demo' },
-        'fr': { 'Bonjour tout le monde! Voici une démo de traduction automatique sur Nostr.': 'Hello everyone! Here is an automatic translation demo on Nostr.', 'Bonjour tout le monde': 'Hello everyone', 'démo de traduction': 'translation demo' },
-        'de': { 'Guten Tag! Dies ist eine Demo für automatische Übersetzung auf Nostr.': 'Good day! This is a demo for automatic translation on Nostr.', 'Guten Tag': 'Good day', 'Demo für automatische': 'demo for automatic' },
-      };
-      
-      const src = sourceLang || detectLanguage(text);
-      const translations = mock[src] || {};
-      
-      let result = text;
-      for (const [k, v] of Object.entries(translations)) {
-        result = result.replace(new RegExp(k, 'gi'), v);
+    function getTranslation(eventId, text, targetLang, sourceLang) {
+      const cacheKey = getCacheKey(eventId, targetLang);
+      const cachedItem = cached[cacheKey];
+
+      if (cachedItem && Date.now() - cachedItem.timestamp < CONFIG.CACHE_TTL) {
+        console.log(`[Cache] Hit for ${eventId}`);
+        return cachedItem.text;
       }
-      
-      // If no phrase replacement worked, add a prefix to show translation happened
-      if (result === text) {
-        if (src !== targetLang) {
-          return `[${src.toUpperCase()} → ${targetLang.toUpperCase()}] ${text}`;
+
+      console.log(`[Translate] Calling Oracle API for ${eventId}...`);
+
+      // Call actual Oracle translation API
+      const oracleUrl = 'https://nostr-oracle.example.com/api/v1/translate';
+
+      try {
+        const response = await fetch(oracleUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: text,
+            target_lang: targetLang,
+            source_lang: sourceLang,
+            event_id: eventId,
+          }),
+        });
+
+        if (!response.ok) throw new Error('Oracle API error');
+        const data = await response.json();
+
+        if (data.success) {
+          const translated = data.translated_text;
+          cached[cacheKey] = { text: translated, timestamp: Date.now() };
+          localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
+          console.log(`[Translate] Success: ${translated.substring(0, 50)}...`);
+          return translated;
         }
+
+        throw new Error(data.error || 'Translation failed');
+      } catch (error) {
+        console.warn(`[Translate] Failed: ${error.message}, using fallback`);
+        // Fallback: return original with language marker
+        return `[${sourceLang} → ${targetLang}] ${text}`;
       }
-      
-      return result;
     }
 
     function getTranslation(eventId, text, targetLang, sourceLang) {
@@ -209,6 +223,7 @@
     function setUserLanguage(lang) {
       userLang = lang;
       localStorage.setItem('nostr_translate_userLang', lang);
+      console.log(`[Init] User language set to: ${lang}`);
     }
 
     function toggleTranslation(eventId) {
@@ -227,11 +242,10 @@
 
       // If no cached translation but state says translated, translate now
       if (uiState[eventId] === 'translated') {
-        console.log(`[Translate] No cache, translating now for ${eventId}`);
-        const translated = translateText(text, targetLang, sourceLang);
-        console.log(`[Translate] Got result: ${translated.substring(0, 50)}...`);
+        console.log(`[Translate] No cache, calling getTranslation for ${eventId}`);
+        const translated = getTranslation(eventId, text, targetLang, sourceLang);
 
-        // Store in cache
+        // Store in cache for future use
         cached[cacheKey] = { text: translated, timestamp: Date.now() };
         localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
 
@@ -392,7 +406,7 @@
         console.log('[Change] Event fired! Value:', e.target.value);
         console.log('[Change] setUserLanguage function exists:', typeof setUserLanguage);
         console.log('[Change] render function exists:', typeof render);
-
+        
         setUserLanguage(e.target.value);
         console.log('[Change] After setUserLanguage, userLang:', userLang);
         render();
