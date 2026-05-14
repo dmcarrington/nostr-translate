@@ -314,6 +314,8 @@
           badge.dataset.eventId = event.id;
           badge.innerHTML = `${getFlag(sourceLang)} ${capitalize(sourceLang)}`;
           badge.title = `Tap to toggle translation between ${capitalize(sourceLang)} and ${capitalize(userLang)}`;
+          console.log(`[Render] Badge innerHTML: ${badge.innerHTML}`);
+          console.log(`[Render] Badge class: ${badge.className}`);
           
           badge.addEventListener('click', () => {
             toggleTranslation(event.id);
@@ -321,6 +323,7 @@
           });
 
           eventEl.appendChild(badge);
+          console.log(`[Render] Badge appended to ${event.id}`);
         } else {
           console.log(`[Render] NO badge for ${event.id}: source=${sourceLang} user=${userLang} (same language)`);
         }
