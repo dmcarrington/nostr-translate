@@ -168,33 +168,33 @@
         'fr': { 'Bonjour tout le monde': 'Hello everyone', 'démo de traduction': 'translation demo' },
         'de': { 'Guten Tag': 'Good day', 'Demo für automatische': 'demo for automatic' },
       };
-      
+
       const src = sourceLang || detectLanguage(text);
       const translations = mock[src] || {};
-      
+
       let result = text;
       for (const [k, v] of Object.entries(translations)) {
         result = result.replace(new RegExp(k, 'gi'), v);
       }
-      
+
       if (result === text) {
         if (src !== targetLang) {
           return `(${src.toUpperCase()} → ${targetLang.toUpperCase()}) ${text.substring(0, 30)}...`;
         }
         return text;
       }
-      
+
       return result;
     }
 
     function getTranslation(eventId, text, targetLang, sourceLang) {
       const cacheKey = getCacheKey(eventId, targetLang);
       const cachedItem = cached[cacheKey];
-      
+
       if (cachedItem && Date.now() - cachedItem.timestamp < CONFIG.CACHE_TTL) {
         return cachedItem.text;
       }
-      
+
       const translated = translateText(text, targetLang, sourceLang);
       cached[cacheKey] = { text: translated, timestamp: Date.now() };
       localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
@@ -214,11 +214,26 @@
     function getDisplayContent(eventId, text, targetLang, sourceLang) {
       const cacheKey = getCacheKey(eventId, targetLang);
       const cachedItem = cached[cacheKey];
-      
+
       if (cachedItem && uiState[eventId] === 'translated') {
+        console.log(`[Cache] Hit for ${eventId}, returning translated`);
         return cachedItem.text;
       }
-      
+
+      // If no cached translation but state says translated, translate now
+      if (uiState[eventId] === 'translated') {
+        console.log(`[Translate] No cache, translating now for ${eventId}`);
+        const translated = translateText(text, targetLang, sourceLang);
+        console.log(`[Translate] Got result: ${translated.substring(0, 50)}...`);
+
+        // Store in cache
+        cached[cacheKey] = { text: translated, timestamp: Date.now() };
+        localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
+
+        return translated;
+      }
+
+      console.log(`[Cache] Miss for ${eventId}, returning original`);
       return text;
     }
 
@@ -302,6 +317,7 @@
         console.log(`[Render] Cache key: ${getCacheKey(event.id, userLang)}`);
         console.log(`[Render] displayContent: ${displayContent.substring(0, 50)}...`);
         console.log(`[Render] uiState[${event.id}]: ${uiState[event.id]}`);
+        console.log(`[Render] Content length: ${displayContent.length}`);
 
         eventEl.innerHTML = `
           <div class="event-header">
@@ -310,6 +326,8 @@
           </div>
           <div class="event-content" data-original="${event.content}">${displayContent}</div>
         `;
+
+        console.log(`[Render] Event HTML set`);
 
         if (sourceLang !== userLang) {
           console.log(`[Render] Adding badge for ${event.id}: source=${sourceLang} user=${userLang}`);
@@ -331,9 +349,10 @@
           console.log(`[Render] Badge innerHTML: ${badge.innerHTML}`);
           console.log(`[Render] Badge class: ${badge.className}`);
           console.log(`[Render] Badge styles applied`);
-          
+
           badge.addEventListener('click', () => {
             console.log(`[Click] Badge clicked for ${event.id}`);
+            console.log(`[Click] Current uiState[${event.id}]: ${uiState[event.id]}`);
             console.log(`[Click] toggleTranslation exists: ${typeof toggleTranslation}`);
             console.log(`[Click] render exists: ${typeof render}`);
             
@@ -368,7 +387,7 @@
         console.log('[Change] Event fired! Value:', e.target.value);
         console.log('[Change] setUserLanguage function exists:', typeof setUserLanguage);
         console.log('[Change] render function exists:', typeof render);
-        
+
         setUserLanguage(e.target.value);
         console.log('[Change] After setUserLanguage, userLang:', userLang);
         render();
