@@ -117,16 +117,232 @@
       </select>
     </div>
 
-    <main class="events-list">
-      <div class="loading">Loading events...</div>
-    </main>
+    <main class="events-list"></main>
 
     <footer>
       <p>Powered by <a href="https://github.com/nostr-oracle" target="_blank">Nostr Oracle</a></p>
     </footer>
   </div>
 
-  <script type="module" src="/translation-module.js"></script>
-  <script type="module" src="/main.js"></script>
+  <script>
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Translation Module (inline for simplicity)
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    const CONFIG = {
+      CACHE_TTL: 24 * 60 * 60 * 1000,
+      MAX_CHARS: 500,
+      FLAG_EMOJI: {
+        en: '🇬🇧', es: '🇪🇸', fr: '🇫🇷', de: '🇩🇪', it: '🇮🇹',
+        pt: '🇵🇹', ru: '🇷🇺', zh: '🇨🇳', ja: '🇯🇵', ko: '🇰🇷',
+        ar: '🇸🇦', hi: '🇮🇳',
+      },
+    };
+
+    let userLang = localStorage.getItem('nostr_translate_userLang') || 'en';
+    let cached = JSON.parse(localStorage.getItem('nostr_translate_cache') || '{}');
+    let uiState = JSON.parse(localStorage.getItem('nostr_translate_uiState') || '{}');
+
+    function detectLanguage(text) {
+      if (/[áéíóúüñ¡¿]/.test(text)) return 'es';
+      if (/[çéèêëàâäôöùûüîï]/.test(text)) return 'fr';
+      if (/[äöüß]/.test(text)) return 'de';
+      if (/[àèéìíòóùú]/.test(text)) return 'it';
+      if (/[áéíóúâêôãõç]/.test(text)) return 'pt';
+      if (/[一-龯]/.test(text)) return 'zh';
+      if (/[あ-んア-ン一-龯]/.test(text)) return 'ja';
+      if (/[가-힣]/.test(text)) return 'ko';
+      if (/[أ-ي]/.test(text)) return 'ar';
+      if (/[ँ-ह]/.test(text)) return 'hi';
+      return 'en';
+    }
+
+    function getCacheKey(eventId, lang) {
+      return `${eventId}:${lang}`;
+    }
+
+    function translateText(text, targetLang, sourceLang) {
+      const mock = {
+        'es': { 'La reunión es': 'The meeting is', '¿Vas a ir?': 'Are you going?', 'centro de la ciudad': 'city center' },
+        'it': { 'Ciao a tutti': 'Hello everyone', 'demo di traduzione': 'translation demo' },
+        'fr': { 'Bonjour tout le monde': 'Hello everyone', 'démo de traduction': 'translation demo' },
+        'de': { 'Guten Tag': 'Good day', 'Demo für automatische': 'demo for automatic' },
+      };
+      
+      const src = sourceLang || detectLanguage(text);
+      const translations = mock[src] || {};
+      
+      let result = text;
+      for (const [k, v] of Object.entries(translations)) {
+        result = result.replace(new RegExp(k, 'gi'), v);
+      }
+      
+      if (result === text) {
+        if (src !== targetLang) {
+          return `(${src.toUpperCase()} → ${targetLang.toUpperCase()}) ${text.substring(0, 30)}...`;
+        }
+        return text;
+      }
+      
+      return result;
+    }
+
+    function getTranslation(eventId, text, targetLang, sourceLang) {
+      const cacheKey = getCacheKey(eventId, targetLang);
+      const cachedItem = cached[cacheKey];
+      
+      if (cachedItem && Date.now() - cachedItem.timestamp < CONFIG.CACHE_TTL) {
+        return cachedItem.text;
+      }
+      
+      const translated = translateText(text, targetLang, sourceLang);
+      cached[cacheKey] = { text: translated, timestamp: Date.now() };
+      localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
+      return translated;
+    }
+
+    function setUserLanguage(lang) {
+      userLang = lang;
+      localStorage.setItem('nostr_translate_userLang', lang);
+    }
+
+    function toggleTranslation(eventId) {
+      uiState[eventId] = uiState[eventId] === 'original' ? 'translated' : 'original';
+      localStorage.setItem('nostr_translate_uiState', JSON.stringify(uiState));
+    }
+
+    function getDisplayContent(eventId, text, targetLang, sourceLang) {
+      const cacheKey = getCacheKey(eventId, targetLang);
+      const cachedItem = cached[cacheKey];
+      
+      if (cachedItem && uiState[eventId] === 'translated') {
+        return cachedItem.text;
+      }
+      
+      return text;
+    }
+
+    function getFlag(lang) {
+      return CONFIG.FLAG_EMOJI[lang] || '🏳️';
+    }
+
+    function capitalize(str) {
+      const names = {
+        'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German',
+        'it': 'Italian', 'pt': 'Portuguese', 'ru': 'Russian', 'zh': 'Chinese',
+        'ja': 'Japanese', 'ko': 'Korean', 'ar': 'Arabic', 'hi': 'Hindi',
+      };
+      return names[str] || str.toUpperCase();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Demo Events & Render
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    const demoEvents = [
+      {
+        id: "demo-es-001",
+        content: "La reunión es a las 3pm mañana en el centro de la ciudad. ¿Vas a ir?",
+        tags: [["language", "es"]],
+        pubkey: "demo-user-1",
+        created_at: Math.floor(Date.now() / 1000)
+      },
+      {
+        id: "demo-it-001",
+        content: "Ciao a tutti! Questa è una demo di traduzione automatica su Nostr.",
+        tags: [["language", "it"]],
+        pubkey: "demo-user-2",
+        created_at: Math.floor(Date.now() / 1000)
+      },
+      {
+        id: "demo-en-001",
+        content: "Hello everyone! This is an English event that won't be translated.",
+        tags: [["language", "en"]],
+        pubkey: "demo-user-3",
+        created_at: Math.floor(Date.now() / 1000)
+      },
+      {
+        id: "demo-fr-001",
+        content: "Bonjour tout le monde! Voici une démo de traduction automatique sur Nostr.",
+        tags: [["language", "fr"]],
+        pubkey: "demo-user-4",
+        created_at: Math.floor(Date.now() / 1000)
+      },
+      {
+        id: "demo-de-001",
+        content: "Guten Tag! Dies ist eine Demo für automatische Übersetzung auf Nostr.",
+        tags: [["language", "de"]],
+        pubkey: "demo-user-5",
+        created_at: Math.floor(Date.now() / 1000)
+      }
+    ];
+
+    function render() {
+      console.log('[Render] Starting...');
+      console.log('[Render] userLang:', userLang);
+      console.log('[Render] demoEvents:', demoEvents.length);
+      console.log('[Render] uiState:', uiState);
+
+      const container = document.querySelector('.events-list');
+      if (!container) {
+        console.error('[Render] Container not found');
+        return;
+      }
+
+      container.innerHTML = '';
+
+      demoEvents.forEach(event => {
+        const eventEl = document.createElement('div');
+        eventEl.className = 'event-card';
+        eventEl.dataset.eventId = event.id;
+
+        const sourceLang = event.tags?.find(t => t[0] === 'language')?.[1] || 'en';
+        const displayContent = getDisplayContent(event.id, event.content, userLang, sourceLang);
+
+        eventEl.innerHTML = `
+          <div class="event-header">
+            <span class="event-id">${event.id.slice(0, 16)}...</span>
+            <span class="event-time">${new Date(event.created_at * 1000).toLocaleTimeString()}</span>
+          </div>
+          <div class="event-content" data-original="${event.content}">${displayContent}</div>
+        `;
+
+        if (sourceLang !== userLang) {
+          const badge = document.createElement('span');
+          badge.className = 'nostr-translate-badge';
+          badge.dataset.eventId = event.id;
+          badge.innerHTML = `${getFlag(sourceLang)} ${capitalize(sourceLang)}`;
+          badge.title = `Tap to toggle translation between ${capitalize(sourceLang)} and ${capitalize(userLang)}`;
+          
+          badge.addEventListener('click', () => {
+            toggleTranslation(event.id);
+            render();
+          });
+
+          eventEl.appendChild(badge);
+        }
+
+        container.appendChild(eventEl);
+        console.log(`[Render] Added event: ${event.id}`);
+      });
+
+      console.log('[Render] Complete');
+    }
+
+    // Initialize
+    console.log('[Init] userLang from localStorage:', userLang);
+    setUserLanguage(userLang);
+
+    // Event listeners
+    document.getElementById('user-lang').addEventListener('change', (e) => {
+      console.log('[Change] Language to:', e.target.value);
+      setUserLanguage(e.target.value);
+      render();
+    });
+
+    // Initial render
+    console.log('[Init] Calling render()...');
+    render();
+  </script>
 </body>
 </html>
