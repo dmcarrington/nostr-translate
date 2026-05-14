@@ -298,6 +298,10 @@
 
         const sourceLang = event.tags?.find(t => t[0] === 'language')?.[1] || 'en';
         const displayContent = getDisplayContent(event.id, event.content, userLang, sourceLang);
+        console.log(`[Render] Event ${event.id}: source=${sourceLang}, userLang=${userLang}`);
+        console.log(`[Render] Cache key: ${getCacheKey(event.id, userLang)}`);
+        console.log(`[Render] displayContent: ${displayContent.substring(0, 50)}...`);
+        console.log(`[Render] uiState[${event.id}]: ${uiState[event.id]}`);
 
         eventEl.innerHTML = `
           <div class="event-header">
