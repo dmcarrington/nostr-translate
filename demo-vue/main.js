@@ -48,12 +48,29 @@ const demoEvents = [
 ];
 
 // Initialize user language from module
+console.log('Initializing with userLang:', userLang);
 setUserLanguage(userLang);
 
 // Render
 function render() {
   const container = document.querySelector('.events-list');
+  const loading = document.querySelector('.loading');
+  
+  if (!container) {
+    console.error('Events list container not found');
+    return;
+  }
+  
+  console.log('Rendering events...');
+  console.log('userLang:', userLang);
+  console.log('demoEvents:', demoEvents.length);
+
   container.innerHTML = '';
+
+  if (!demoEvents || demoEvents.length === 0) {
+    container.innerHTML = 'No events to display';
+    return;
+  }
 
   demoEvents.forEach(event => {
     const eventEl = document.createElement('div');
@@ -88,13 +105,16 @@ function render() {
 
     container.appendChild(eventEl);
   });
+  console.log('Rendering complete');
 }
 
 // User language selector
 document.getElementById('user-lang').addEventListener('change', (e) => {
+  console.log('Language changed to:', e.target.value);
   setUserLanguage(e.target.value);
   render();
 });
 
 // Initial render
+console.log('Starting render...');
 render();
