@@ -1,4 +1,12 @@
-import { detectLanguage, setUserLanguage, getFlag, capitalize, toggleTranslation, getDisplayContent } from './translation-module.js';
+import { 
+  userLang, 
+  uiState, 
+  setUserLanguage, 
+  toggleTranslation, 
+  getDisplayContent,
+  getFlag,
+  capitalize
+} from './translation-module.js';
 
 // Demo events
 const demoEvents = [
@@ -39,7 +47,7 @@ const demoEvents = [
   }
 ];
 
-let userLang = localStorage.getItem('nostr_translate_userLang') || 'en';
+// Initialize user language from module
 setUserLanguage(userLang);
 
 // Render
