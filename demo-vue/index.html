@@ -308,6 +308,7 @@
         `;
 
         if (sourceLang !== userLang) {
+          console.log(`[Render] Adding badge for ${event.id}: source=${sourceLang} user=${userLang}`);
           const badge = document.createElement('span');
           badge.className = 'nostr-translate-badge';
           badge.dataset.eventId = event.id;
@@ -320,6 +321,8 @@
           });
 
           eventEl.appendChild(badge);
+        } else {
+          console.log(`[Render] NO badge for ${event.id}: source=${sourceLang} user=${userLang} (same language)`);
         }
 
         container.appendChild(eventEl);
