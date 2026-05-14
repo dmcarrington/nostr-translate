@@ -333,8 +333,14 @@
           console.log(`[Render] Badge styles applied`);
           
           badge.addEventListener('click', () => {
+            console.log(`[Click] Badge clicked for ${event.id}`);
+            console.log(`[Click] toggleTranslation exists: ${typeof toggleTranslation}`);
+            console.log(`[Click] render exists: ${typeof render}`);
+            
             toggleTranslation(event.id);
+            console.log(`[Click] After toggleTranslation, uiState[${event.id}]: ${uiState[event.id]}`);
             render();
+            console.log(`[Click] Render completed`);
           });
 
           eventEl.appendChild(badge);
