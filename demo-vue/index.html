@@ -5,22 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nostr Translate Demo</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
       background: #0a0a0f;
       color: #c8d4e8;
       min-height: 100vh;
     }
-    #app {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 20px;
-    }
+    #app { max-width: 800px; margin: 0 auto; padding: 20px; }
     header {
       text-align: center;
       margin-bottom: 30px;
@@ -28,14 +20,8 @@
       background: rgba(30, 45, 74, 0.3);
       border-radius: 10px;
     }
-    header h1 {
-      font-size: 2em;
-      color: #f0f4ff;
-      margin-bottom: 10px;
-    }
-    .subtitle {
-      color: #7a8ba8;
-    }
+    header h1 { font-size: 2em; color: #f0f4ff; margin-bottom: 10px; }
+    .subtitle { color: #7a8ba8; }
     .controls {
       display: flex;
       justify-content: center;
@@ -56,11 +42,7 @@
       font-size: 14px;
       cursor: pointer;
     }
-    .events-list {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
+    .events-list { display: flex; flex-direction: column; gap: 20px; }
     .event-card {
       background: #0d101a;
       border: 1px solid #1e2d4a;
@@ -98,6 +80,16 @@
     }
     .nostr-translate-badge:hover { background: rgba(0, 122, 255, 0.2); }
     .nostr-translate-badge:active { background: rgba(0, 122, 255, 0.3); }
+    footer {
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #1e2d4a;
+      color: #7a8ba8;
+      font-size: 14px;
+    }
+    footer a { color: #f0a500; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -125,149 +117,14 @@
       </select>
     </div>
 
-    <main class="events-list">
-      <!-- Events will be rendered here -->
-    </main>
+    <main class="events-list"></main>
 
-    <footer style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #1e2d4a; color: #7a8ba8; font-size: 14px;">
+    <footer>
       <p>Powered by <a href="https://github.com/nostr-oracle" target="_blank">Nostr Oracle</a></p>
     </footer>
   </div>
 
   <script type="module" src="/translation-module.js"></script>
   <script type="module" src="/main.js"></script>
-    import { processIncomingEvent, initTranslationService, setUserLanguage } from './client-ui.js';
-
-    const demoEvents = [
-      {
-        id: "demo-es-001",
-        content: "La reunión es a las 3pm mañana en el centro de la ciudad. ¿Vas a ir?",
-        tags: [["language", "es"]],
-        pubkey: "demo-user-1",
-        created_at: Math.floor(Date.now() / 1000)
-      },
-      {
-        id: "demo-it-001",
-        content: "Ciao a tutti! Questa è una demo di traduzione automatica su Nostr.",
-        tags: [["language", "it"]],
-        pubkey: "demo-user-2",
-        created_at: Math.floor(Date.now() / 1000)
-      },
-      {
-        id: "demo-en-001",
-        content: "Hello everyone! This is an English event that won't be translated.",
-        tags: [["language", "en"]],
-        pubkey: "demo-user-3",
-        created_at: Math.floor(Date.now() / 1000)
-      },
-      {
-        id: "demo-fr-001",
-        content: "Bonjour tout le monde! Voici une démo de traduction automatique sur Nostr.",
-        tags: [["language", "fr"]],
-        pubkey: "demo-user-4",
-        created_at: Math.floor(Date.now() / 1000)
-      },
-      {
-        id: "demo-de-001",
-        content: "Guten Tag! Dies ist eine Demo für automatische Übersetzung auf Nostr.",
-        tags: [["language", "de"]],
-        pubkey: "demo-user-5",
-        created_at: Math.floor(Date.now() / 1000)
-      }
-    ];
-
-    // State
-    let userLang = localStorage.getItem('nostr_translate_userLang') || 'en';
-    let uiState = JSON.parse(localStorage.getItem('nostr_translate_uiState') || '{}');
-
-    // Initialize
-    initTranslationService();
-    setUserLanguage(userLang);
-
-    // Load events
-    const events = demoEvents.map(event => processIncomingEvent(event));
-    console.log('Events loaded:', events.length);
-
-    // Render function
-    function render() {
-      const container = document.querySelector('.events-list');
-      container.innerHTML = '';
-
-      events.forEach(event => {
-        const eventEl = document.createElement('div');
-        eventEl.className = 'event-card';
-        eventEl.dataset.eventId = event.id;
-
-        // Detect source language
-        const sourceLang = event.tags?.find(t => t[0] === 'language')?.[1] || 'en';
-        const cacheKey = `${event.id}:${userLang}`;
-        const cached = localStorage.getItem('nostr_translate_cache');
-        let displayContent = event.content;
-
-        if (cached) {
-          const cache = JSON.parse(cached);
-          if (cache[cacheKey] && uiState[event.id] === 'translated') {
-            displayContent = cache[cacheKey].text;
-          }
-        }
-
-        eventEl.innerHTML = `
-          <div class="event-header">
-            <span class="event-id">${event.id.slice(0, 16)}...</span>
-            <span class="event-time">${new Date(event.created_at * 1000).toLocaleTimeString()}</span>
-          </div>
-          <div class="event-content" data-original="${event.content}">${displayContent}</div>
-        `;
-
-        // Add badge if source language != user language
-        if (sourceLang !== userLang) {
-          const badge = document.createElement('span');
-          badge.className = 'nostr-translate-badge';
-          badge.dataset.eventId = event.id;
-          badge.innerHTML = `${getFlag(sourceLang)} ${capitalize(sourceLang)}`;
-          badge.title = `Tap to toggle translation between ${capitalize(sourceLang)} and ${capitalize(userLang)}`;
-          
-          badge.addEventListener('click', () => {
-            uiState[event.id] = uiState[event.id] === 'original' ? 'translated' : 'original';
-            localStorage.setItem('nostr_translate_uiState', JSON.stringify(uiState));
-            render(); // Re-render to show translated content
-          });
-
-          eventEl.appendChild(badge);
-        }
-
-        container.appendChild(eventEl);
-      });
-    }
-
-    function getFlag(lang) {
-      const flags = {
-        en: '🇬🇧', es: '🇪🇸', fr: '🇫🇷', de: '🇩🇪', it: '🇮🇹',
-        pt: '🇵🇹', ru: '🇷🇺', zh: '🇨🇳', ja: '🇯🇵', ko: '🇰🇷',
-        ar: '🇸🇦', hi: '🇮🇳',
-      };
-      return flags[lang] || '🏳️';
-    }
-
-    function capitalize(str) {
-      const names = {
-        'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German',
-        'it': 'Italian', 'pt': 'Portuguese', 'ru': 'Russian', 'zh': 'Chinese',
-        'ja': 'Japanese', 'ko': 'Korean', 'ar': 'Arabic', 'hi': 'Hindi',
-      };
-      return names[str] || str.toUpperCase();
-    }
-
-    // User language selector
-    document.getElementById('user-lang').addEventListener('change', (e) => {
-      userLang = e.target.value;
-      localStorage.setItem('nostr_translate_userLang', userLang);
-      setUserLanguage(userLang);
-      render();
-    });
-
-    // Initial render
-    render();
-  </script>
 </body>
 </html>
