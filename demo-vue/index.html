@@ -161,7 +161,7 @@
       return `${eventId}:${lang}`;
     }
 
-    function getTranslation(eventId, text, targetLang, sourceLang) {
+    async function getTranslation(eventId, text, targetLang, sourceLang) {
       const cacheKey = getCacheKey(eventId, targetLang);
       const cachedItem = cached[cacheKey];
 
@@ -204,20 +204,6 @@
         // Fallback: return original with language marker
         return `[${sourceLang} → ${targetLang}] ${text}`;
       }
-    }
-
-    function getTranslation(eventId, text, targetLang, sourceLang) {
-      const cacheKey = getCacheKey(eventId, targetLang);
-      const cachedItem = cached[cacheKey];
-
-      if (cachedItem && Date.now() - cachedItem.timestamp < CONFIG.CACHE_TTL) {
-        return cachedItem.text;
-      }
-
-      const translated = translateText(text, targetLang, sourceLang);
-      cached[cacheKey] = { text: translated, timestamp: Date.now() };
-      localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
-      return translated;
     }
 
     function setUserLanguage(lang) {
