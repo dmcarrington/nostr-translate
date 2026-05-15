@@ -349,15 +349,13 @@
           console.log(`[Render] Badge class: ${badge.className}`);
           console.log(`[Render] Badge styles applied`);
 
-          badge.addEventListener('click', () => {
+          badge.addEventListener('click', async () => {
             console.log(`[Click] Badge clicked for ${event.id}`);
-            console.log(`[Click] Current uiState[${event.id}]: ${uiState[event.id]}`);
             console.log(`[Click] toggleTranslation exists: ${typeof toggleTranslation}`);
-            console.log(`[Click] render exists: ${typeof render}`);
 
             toggleTranslation(event.id);
             console.log(`[Click] After toggleTranslation, uiState[${event.id}]: ${uiState[event.id]}`);
-            render();
+            await render();
             console.log(`[Click] Render completed`);
           });
 
@@ -382,18 +380,35 @@
     const langSelect = document.getElementById('user-lang');
     if (langSelect) {
       console.log('[Init] Found language select element');
-      langSelect.addEventListener('change', (e) => {
+      langSelect.addEventListener('change', async (e) => {
         console.log('[Change] Event fired! Value:', e.target.value);
-        console.log('[Change] setUserLanguage function exists:', typeof setUserLanguage);
-        console.log('[Change] render function exists:', typeof render);
-        
+
         setUserLanguage(e.target.value);
         console.log('[Change] After setUserLanguage, userLang:', userLang);
-        render();
+        await render();
         console.log('[Change] Render completed');
       });
     } else {
       console.error('[Init] Language select element NOT FOUND');
+    }
+
+    // Add clear cache button
+    const footer = document.querySelector('footer');
+    if (footer) {
+      const clearBtn = document.createElement('button');
+      clearBtn.textContent = 'Clear Cache';
+      clearBtn.style.marginTop = '10px';
+      clearBtn.style.padding = '5px 10px';
+      clearBtn.style.background = '#1e2d4a';
+      clearBtn.style.color = '#c8d4e8';
+      clearBtn.style.border = 'none';
+      clearBtn.style.borderRadius = '4px';
+      clearBtn.style.cursor = 'pointer';
+      clearBtn.onclick = async () => {
+        clearCache();
+        await render();
+      };
+      footer.appendChild(clearBtn);
     }
 
     // Initial render
