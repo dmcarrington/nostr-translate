@@ -161,6 +161,15 @@
       return `${eventId}:${lang}`;
     }
 
+    function clearCache() {
+      console.log('[Cache] Clearing...');
+      localStorage.removeItem('nostr_translate_cache');
+      localStorage.removeItem('nostr_translate_uiState');
+      cached = {};
+      uiState = {};
+      console.log('[Cache] Cleared');
+    }
+
     async function getTranslation(eventId, text, targetLang, sourceLang) {
       const cacheKey = getCacheKey(eventId, targetLang);
       const cachedItem = cached[cacheKey];
