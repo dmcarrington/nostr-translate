@@ -245,11 +245,6 @@
         localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
 
         return translated;
-      }
-
-      console.log(`[Cache] Miss for ${eventId}, returning original`);
-      return text;
-    }
 
     function getFlag(lang) {
       return CONFIG.FLAG_EMOJI[lang] || '🏳️';
@@ -306,7 +301,7 @@
       }
     ];
 
-    function render() {
+    async function render() {
       console.log('[Render] Starting...');
       console.log('[Render] userLang:', userLang);
       console.log('[Render] demoEvents:', demoEvents.length);
@@ -320,13 +315,13 @@
 
       container.innerHTML = '';
 
-      demoEvents.forEach(event => {
+      for (const event of demoEvents) {
         const eventEl = document.createElement('div');
         eventEl.className = 'event-card';
         eventEl.dataset.eventId = event.id;
 
         const sourceLang = event.tags?.find(t => t[0] === 'language')?.[1] || 'en';
-        const displayContent = getDisplayContent(event.id, event.content, userLang, sourceLang);
+        const displayContent = await getDisplayContent(event.id, event.content, userLang, sourceLang);
         console.log(`[Render] Event ${event.id}: source=${sourceLang}, userLang=${userLang}`);
         console.log(`[Render] Cache key: ${getCacheKey(event.id, userLang)}`);
         console.log(`[Render] displayContent type: ${typeof displayContent}`);
@@ -386,7 +381,7 @@
 
         container.appendChild(eventEl);
         console.log(`[Render] Added event: ${event.id}`);
-      });
+      }
 
       console.log('[Render] Complete');
     }
