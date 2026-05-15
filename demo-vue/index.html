@@ -187,11 +187,11 @@
           }),
         });
 
-        if (!response.ok) throw new Error('Oracle API error: ' + response.status + ' ' + response.statusText);
+        if (!response.ok) throw new Error('Oracle API error');
         const data = await response.json();
 
         if (data.success) {
-          const translated = String(data.answer || data.translated_text || '');
+          const translated = data.answer || data.translated_text || '';
           cached[cacheKey] = { text: translated, timestamp: Date.now() };
           localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
           console.log(`[Translate] Success: ${translated.substring(0, 50)}...`);
@@ -212,12 +212,6 @@
       console.log(`[Init] User language set to: ${lang}`);
     }
 
-    function clearCache() {
-      localStorage.removeItem('nostr_translate_cache');
-      localStorage.removeItem('nostr_translate_uiState');
-      console.log('[Init] Cache cleared');
-    }
-
     function toggleTranslation(eventId) {
       uiState[eventId] = uiState[eventId] === 'original' ? 'translated' : 'original';
       localStorage.setItem('nostr_translate_uiState', JSON.stringify(uiState));
@@ -228,23 +222,19 @@
       const cachedItem = cached[cacheKey];
 
       if (cachedItem && uiState[eventId] === 'translated') {
-        console.log(`[Cache] Hit for ${eventId}`);
-        console.log(`[Cache] cachedItem type: ${typeof cachedItem}, text type: ${typeof cachedItem.text}`);
         const textStr = typeof cachedItem.text === 'string' ? cachedItem.text : String(cachedItem.text);
         return textStr;
       }
 
-      // If no cached translation but state says translated, translate now
       if (uiState[eventId] === 'translated') {
-        console.log(`[Translate] No cache, calling getTranslation for ${eventId}`);
         const translated = await getTranslation(eventId, text, targetLang, sourceLang);
-        console.log(`[Translate] Got: ${translated.substring(0, 50)}...`);
-
-        // Store in cache for future use
         cached[cacheKey] = { text: translated, timestamp: Date.now() };
         localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
-
         return translated;
+      }
+
+      return text;
+    }
 
     function getFlag(lang) {
       return CONFIG.FLAG_EMOJI[lang] || '🏳️';
@@ -324,9 +314,7 @@
         const displayContent = await getDisplayContent(event.id, event.content, userLang, sourceLang);
         console.log(`[Render] Event ${event.id}: source=${sourceLang}, userLang=${userLang}`);
         console.log(`[Render] Cache key: ${getCacheKey(event.id, userLang)}`);
-        console.log(`[Render] displayContent type: ${typeof displayContent}`);
-        const displayStr = typeof displayContent === 'string' ? displayContent : String(displayContent);
-        console.log(`[Render] displayContent: ${displayStr.substring(0, 50)}...`);
+        console.log(`[Render] displayContent: ${displayContent.substring(0, 50)}...`);
         console.log(`[Render] uiState[${event.id}]: ${uiState[event.id]}`);
         console.log(`[Render] Content length: ${displayContent.length}`);
 
@@ -381,7 +369,7 @@
 
         container.appendChild(eventEl);
         console.log(`[Render] Added event: ${event.id}`);
-      }
+      });
 
       console.log('[Render] Complete');
     }
@@ -406,22 +394,6 @@
       });
     } else {
       console.error('[Init] Language select element NOT FOUND');
-    }
-
-    // Add a clear cache button in footer
-    const footer = document.querySelector('footer');
-    if (footer) {
-      const clearBtn = document.createElement('button');
-      clearBtn.textContent = 'Clear Cache';
-      clearBtn.style.marginTop = '10px';
-      clearBtn.style.padding = '5px 10px';
-      clearBtn.style.background = '#1e2d4a';
-      clearBtn.style.color = '#c8d4e8';
-      clearBtn.style.border = 'none';
-      clearBtn.style.borderRadius = '4px';
-      clearBtn.style.cursor = 'pointer';
-      clearBtn.onclick = clearCache;
-      footer.appendChild(clearBtn);
     }
 
     // Initial render
