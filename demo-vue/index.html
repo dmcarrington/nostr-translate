@@ -189,32 +189,33 @@
         return cachedItem.text;
       }
 
-      console.log(`[Translate] Translating ${sourceLang} → ${targetLang}...`);
+      console.log(`[Translate] Calling Nostr Oracle...`);
 
       try {
-        // Use free public LibreTranslate API for demo
-        const response = await fetch('https://libretranslate.com/translate', {
+        const response = await fetch('https://nostr-oracle-web.vercel.app/api/translate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            q: text,
-            source: sourceLang,
-            target: targetLang,
-            format: 'text'
+            text: text,
+            targetLang: targetLang,
+            sourceLang: sourceLang,
           }),
         });
 
-        if (!response.ok) throw new Error('Translation API error: ' + response.status);
+        if (!response.ok) throw new Error('Oracle API error: ' + response.status);
         const data = await response.json();
 
-        const translated = String(data.translatedText || '');
-        if (translated) {
-          cached[cacheKey] = { text: translated, timestamp: Date.now() };
-          localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
-          console.log(`[Translate] Success: ${translated.substring(0, 50)}...`);
-          return translated;
+        if (data.success) {
+          const translated = String(data.answer || '');
+          if (translated) {
+            cached[cacheKey] = { text: translated, timestamp: Date.now() };
+            localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
+            console.log(`[Translate] Success: ${translated.substring(0, 50)}...`);
+            return translated;
+          }
+          throw new Error('No translation returned');
         }
-        throw new Error('No translation returned');
+        throw new Error(data.error || 'Oracle translation failed');
       } catch (error) {
         console.warn(`[Translate] Failed: ${error.message}, using fallback`);
         // Fallback: return original with language marker
