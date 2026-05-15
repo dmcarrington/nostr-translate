@@ -170,6 +170,16 @@
       console.log('[Cache] Cleared');
     }
 
+    function setUserLanguage(lang) {
+      userLang = lang;
+      localStorage.setItem('nostr_translate_userLang', lang);
+    }
+
+    function toggleTranslation(eventId) {
+      uiState[eventId] = uiState[eventId] === 'translated' ? 'original' : 'translated';
+      localStorage.setItem('nostr_translate_uiState', JSON.stringify(uiState));
+    }
+
     async function getTranslation(eventId, text, targetLang, sourceLang) {
       const cacheKey = getCacheKey(eventId, targetLang);
       const cachedItem = cached[cacheKey];
@@ -223,6 +233,23 @@
         'ja': 'Japanese', 'ko': 'Korean', 'ar': 'Arabic', 'hi': 'Hindi',
       };
       return names[str] || str.toUpperCase();
+    }
+
+    async function getDisplayContent(eventId, text, targetLang, sourceLang) {
+      const cacheKey = getCacheKey(eventId, targetLang);
+      const cachedItem = cached[cacheKey];
+
+      if (cachedItem && uiState[eventId] === 'translated') {
+        const textStr = typeof cachedItem.text === 'string' ? cachedItem.text : String(cachedItem.text);
+        return textStr;
+      }
+
+      if (uiState[eventId] === 'translated') {
+        const translated = await getTranslation(eventId, text, targetLang, sourceLang);
+        return translated;
+      }
+
+      return text;
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
