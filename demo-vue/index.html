@@ -223,7 +223,7 @@
       localStorage.setItem('nostr_translate_uiState', JSON.stringify(uiState));
     }
 
-    function getDisplayContent(eventId, text, targetLang, sourceLang) {
+    async function getDisplayContent(eventId, text, targetLang, sourceLang) {
       const cacheKey = getCacheKey(eventId, targetLang);
       const cachedItem = cached[cacheKey];
 
@@ -237,7 +237,8 @@
       // If no cached translation but state says translated, translate now
       if (uiState[eventId] === 'translated') {
         console.log(`[Translate] No cache, calling getTranslation for ${eventId}`);
-        const translated = getTranslation(eventId, text, targetLang, sourceLang);
+        const translated = await getTranslation(eventId, text, targetLang, sourceLang);
+        console.log(`[Translate] Got: ${translated.substring(0, 50)}...`);
 
         // Store in cache for future use
         cached[cacheKey] = { text: translated, timestamp: Date.now() };
