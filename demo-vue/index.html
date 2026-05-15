@@ -173,7 +173,7 @@
       console.log(`[Translate] Calling Oracle API for ${eventId}...`);
 
       // Call actual Oracle translation API
-      const oracleUrl = 'https://nostr-oracle.example.com/api/v1/translate';
+      const oracleUrl = 'https://nostr-oracle-web.vercel.app/api/translate';
 
       try {
         const response = await fetch(oracleUrl, {
@@ -187,11 +187,11 @@
           }),
         });
 
-        if (!response.ok) throw new Error('Oracle API error');
+        if (!response.ok) throw new Error('Oracle API error: ' + response.status + ' ' + response.statusText);
         const data = await response.json();
 
         if (data.success) {
-          const translated = data.translated_text;
+          const translated = data.translated_text || data.answer || '';
           cached[cacheKey] = { text: translated, timestamp: Date.now() };
           localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
           console.log(`[Translate] Success: ${translated.substring(0, 50)}...`);
@@ -320,7 +320,9 @@
         const displayContent = getDisplayContent(event.id, event.content, userLang, sourceLang);
         console.log(`[Render] Event ${event.id}: source=${sourceLang}, userLang=${userLang}`);
         console.log(`[Render] Cache key: ${getCacheKey(event.id, userLang)}`);
-        console.log(`[Render] displayContent: ${displayContent.substring(0, 50)}...`);
+        console.log(`[Render] displayContent type: ${typeof displayContent}`);
+        const displayStr = typeof displayContent === 'string' ? displayContent : String(displayContent);
+        console.log(`[Render] displayContent: ${displayStr.substring(0, 50)}...`);
         console.log(`[Render] uiState[${event.id}]: ${uiState[event.id]}`);
         console.log(`[Render] Content length: ${displayContent.length}`);
 
