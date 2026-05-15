@@ -179,70 +179,37 @@
         return cachedItem.text;
       }
 
-      console.log(`[Translate] Calling Oracle API for ${eventId}...`);
-
-      // Call actual Oracle translation API
-      const oracleUrl = 'https://nostr-oracle-web.vercel.app/api/translate';
+      console.log(`[Translate] Translating ${sourceLang} → ${targetLang}...`);
 
       try {
-        const response = await fetch(oracleUrl, {
+        // Use free public LibreTranslate API for demo
+        const response = await fetch('https://libretranslate.com/translate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            text: text,
-            target_lang: targetLang,
-            source_lang: sourceLang,
-            event_id: eventId,
+            q: text,
+            source: sourceLang,
+            target: targetLang,
+            format: 'text'
           }),
         });
 
-        if (!response.ok) throw new Error('Oracle API error');
+        if (!response.ok) throw new Error('Translation API error: ' + response.status);
         const data = await response.json();
 
-        if (data.success) {
-          const translated = data.answer || data.translated_text || '';
+        const translated = String(data.translatedText || '');
+        if (translated) {
           cached[cacheKey] = { text: translated, timestamp: Date.now() };
           localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
           console.log(`[Translate] Success: ${translated.substring(0, 50)}...`);
           return translated;
         }
-
-        throw new Error(data.error || 'Translation failed');
+        throw new Error('No translation returned');
       } catch (error) {
         console.warn(`[Translate] Failed: ${error.message}, using fallback`);
         // Fallback: return original with language marker
         return `[${sourceLang} → ${targetLang}] ${text}`;
       }
-    }
-
-    function setUserLanguage(lang) {
-      userLang = lang;
-      localStorage.setItem('nostr_translate_userLang', lang);
-      console.log(`[Init] User language set to: ${lang}`);
-    }
-
-    function toggleTranslation(eventId) {
-      uiState[eventId] = uiState[eventId] === 'original' ? 'translated' : 'original';
-      localStorage.setItem('nostr_translate_uiState', JSON.stringify(uiState));
-    }
-
-    async function getDisplayContent(eventId, text, targetLang, sourceLang) {
-      const cacheKey = getCacheKey(eventId, targetLang);
-      const cachedItem = cached[cacheKey];
-
-      if (cachedItem && uiState[eventId] === 'translated') {
-        const textStr = typeof cachedItem.text === 'string' ? cachedItem.text : String(cachedItem.text);
-        return textStr;
-      }
-
-      if (uiState[eventId] === 'translated') {
-        const translated = await getTranslation(eventId, text, targetLang, sourceLang);
-        cached[cacheKey] = { text: translated, timestamp: Date.now() };
-        localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
-        return translated;
-      }
-
-      return text;
     }
 
     function getFlag(lang) {
