@@ -191,7 +191,7 @@
         const data = await response.json();
 
         if (data.success) {
-          const translated = data.translated_text || data.answer || '';
+          const translated = data.answer || data.translated_text || '';
           cached[cacheKey] = { text: translated, timestamp: Date.now() };
           localStorage.setItem('nostr_translate_cache', JSON.stringify(cached));
           console.log(`[Translate] Success: ${translated.substring(0, 50)}...`);
