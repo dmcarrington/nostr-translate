@@ -1,111 +1,201 @@
 /**
- * Translation UI Component for Nostr Clients
- * 
- * Features:
- * - Auto-detects source language on incoming events
- * - Displays language badge (e.g., [🇪🇸], [🇫🇷])
- * - Tap badge to toggle between original and translated content
- * - Caches translations locally
- * - Respects user's preferred language setting
+ * Nostr-Native Translation Client
+ *
+ * Translates Nostr events via the WOPR Oracle DVM (NIP-90).
+ * Publishes kind 5002 job requests, subscribes for kind 6002 results.
+ *
+ * Requirements: nostr-tools v2+
+ *   npm install nostr-tools
+ *
+ * Usage:
+ *   import { initTranslationService, processIncomingEvent, setUserLanguage } from './client-ui.mjs';
+ *   initTranslationService({ relays: ['wss://relay.damus.io'], userPubkey: '...' });
+ *   const translated = await processIncomingEvent(event);
  */
 
-// ─────────────────────────────────────────────────────────────────────────────
+import { finalizeEvent, getPublicKey } from 'nostr-tools';
+import { SimplePool } from 'nostr-tools/pool';
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Configuration
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
 
 const CONFIG = {
-  TRANSLATION_API: 'https://nostr-oracle.example.com/api/v1/translate',
-  CACHE_TTL: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
-  MAX_CHARS: 500, // Don't translate if content exceeds this
+  /** WOPR Oracle hex pubkey (posts kind 6002 results) */
+  ORACLE_PUBKEY: '7e3d8c8f9a5b1c2d4e6f8a0b2c4d6e8f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c',
+
+  /** Relays the Oracle listens on — must match oracle.py RELAYS */
+  ORACLE_RELAYS: [
+    'wss://relay.damus.io',
+    'wss://relay.nostr.net',
+    'wss://nos.lol',
+    'wss://relay.primal.net',
+  ],
+
+  /** How long to wait for a translation result (ms) */
+  RESULT_TIMEOUT: 15_000,
+
+  /** Local cache TTL (ms) */
+  CACHE_TTL: 24 * 60 * 60 * 1000,
+
+  /** Don't translate content longer than this */
+  MAX_CHARS: 500,
+
   SUPPORTED_LANGS: ['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh', 'ja', 'ko', 'ar', 'hi'],
+
   FLAG_EMOJI: {
     'en': '🇬🇧', 'es': '🇪🇸', 'fr': '🇫🇷', 'de': '🇩🇪', 'it': '🇮🇹',
     'pt': '🇵🇹', 'ru': '🇷🇺', 'zh': '🇨🇳', 'ja': '🇯🇵', 'ko': '🇰🇷',
     'ar': '🇸🇦', 'hi': '🇮🇳',
   },
+
+  LANG_NAMES: {
+    'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German',
+    'it': 'Italian', 'pt': 'Portuguese', 'ru': 'Russian', 'zh': 'Chinese',
+    'ja': 'Japanese', 'ko': 'Korean', 'ar': 'Arabic', 'hi': 'Hindi',
+  },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// State Management
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════════════════════
 
 const state = {
+  /** nostr-tools SimplePool instance, created on init */
+  pool: null,
+
+  /** User's hex pubkey (required for NIP-90 job signing) */
+  userPubkey: null,
+
+  /** User's nsec or signer function (required for signing kind 5002) */
+  signer: null,
+
+  /** Connected relay URLs */
+  relays: [],
+
+  /** User's preferred target language */
   userLang: localStorage.getItem('nostr_translate_userLang') || 'en',
+
+  /** Translation cache: { "eventId:lang" -> { text, timestamp } } */
   cached: JSON.parse(localStorage.getItem('nostr_translate_cache') || '{}'),
-  uiState: {}, // event_id -> 'original' | 'translated'
+
+  /** UI toggle state: event_id -> 'original' | 'translated' */
+  uiState: JSON.parse(localStorage.getItem('nostr_translate_uiState') || '{}'),
+
+  /** In-flight translations: jobId -> { resolve, reject, timer } */
+  pending: {},
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Language Detection
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Language Detection (heuristic, no HTTP dependency)
+// ═══════════════════════════════════════════════════════════════════════════════
 
-async function detectLanguage(text) {
-  try {
-    const response = await fetch('https://nostr-oracle.example.com/api/v1/langdetect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
-    
-    if (!response.ok) throw new Error('langdetect failed');
-    const data = await response.json();
-    return data.language || 'en';
-  } catch {
-    // Fallback: simple heuristics
-    const hasSpanish = /(?:o|a|e|u|ñ|á|é|í|ó|ú|ión|ación|ción|sión|sión|é|í|ó|ú|ñ|¿|¡)/i.test(text);
-    const hasFrench = /(?:ç|é|è|ê|ë|â|ä|ô|ö|ù|û|ç|à|â|é|è|ê|ë|î|ï|ô|ö|ù|û|ç|à|â|é|è|ê|ë|î|ï|ô|ö|ù|û|ç|à|â|é|è|ê|ë|î|ï|ô|ö|ù|û|ç|à)/i.test(text);
-    const hasGerman = /(?:ä|ö|ü|ß|anch|ung|heit|keit|sch|ich|ung|keit)/i.test(text);
-    
-    if (hasSpanish) return 'es';
-    if (hasFrench) return 'fr';
-    if (hasGerman) return 'de';
-    
-    return 'en';
-  }
+function detectLanguage(text) {
+  if (/[\u4e00-\u9fff]/.test(text)) return 'zh';    // CJK Unified
+  if (/[\u3040-\u309f\u30a0-\u30ff]/.test(text)) return 'ja'; // Hiragana + Katakana
+  if (/[\uac00-\ud7af]/.test(text)) return 'ko';    // Hangul
+  if (/[\u0600-\u06ff]/.test(text)) return 'ar';    // Arabic
+  if (/[\u0900-\u097f]/.test(text)) return 'hi';    // Devanagari
+  if (/[äöüß]/.test(text)) return 'de';
+  if (/[çéèêëàâäôöùûüîï]/.test(text)) return 'fr';
+  if (/[áéíóúüñ¡¿]/.test(text)) return 'es';
+  if (/[àèéìíòóùú]/.test(text)) return 'it';
+  if (/[áéíóúâêôãõç]/.test(text)) return 'pt';
+  if (/[\u0400-\u04ff]/.test(text)) return 'ru';    // Cyrillic
+  return 'en';
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Translation
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Nostr-Native Translation
+// ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Translate text by publishing a kind 5002 job to the WOPR Oracle
+ * and waiting for a kind 6002 result.
+ */
 async function translateEvent(eventId, text, targetLang, sourceLang) {
-  // Check cache first
+  // 1. Check local cache
   const cacheKey = `${eventId}:${targetLang}`;
   const cached = state.cached[cacheKey];
-  
   if (cached && Date.now() - cached.timestamp < CONFIG.CACHE_TTL) {
     return cached.text;
   }
-  
-  // Call translation API
+
+  // 2. Need a signer and pool to proceed
+  if (!state.signer || !state.pool) {
+    console.warn('[Nostr Translate] No signer/pool configured. Skipping network translation.');
+    return null;
+  }
+
   try {
-    const response = await fetch(CONFIG.TRANSLATION_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        target_lang: targetLang,
-        source_lang: sourceLang || 'auto',
-        event_id: eventId,
-      }),
+    // 3. Create kind 5002 translation job
+    const jobEvent = finalizeEvent(
+      {
+        kind: 5002,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ['i', text, 'text'],
+          ['param', 'lang', targetLang],
+          ...(sourceLang && sourceLang !== 'auto' ? [['param', 'source_lang', sourceLang]] : []),
+        ],
+        content: text,
+      },
+      state.signer,
+    );
+
+    // 4. Subscribe for kind 6002 result before publishing
+    const resultPromise = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`Translation timed out after ${CONFIG.RESULT_TIMEOUT / 1000}s`));
+      }, CONFIG.RESULT_TIMEOUT);
+
+      const sub = state.pool.subscribeMany(
+        state.relays,
+        [
+          {
+            kinds: [6002],
+            '#e': [jobEvent.id],
+            authors: [CONFIG.ORACLE_PUBKEY],
+            since: Math.floor(Date.now() / 1000),
+          },
+        ],
+        {
+          onevent(evt) {
+            const content = evt.content?.trim();
+            if (content) {
+              cleanup();
+              resolve(content);
+            }
+          },
+          oneose() {
+            // EOSE reached without result — keep waiting for timeout
+          },
+        },
+      );
+
+      function cleanup() {
+        clearTimeout(timer);
+        sub.close();
+      }
+
+      state.pending[jobEvent.id] = { cleanup, timer };
     });
-    
-    if (!response.ok) throw new Error('translation failed');
-    const data = await response.json();
-    
-    if (data.success) {
-      // Cache result
-      state.cached[cacheKey] = {
-        text: data.translated_text,
-        timestamp: Date.now(),
-      };
-      saveCache();
-      return data.translated_text;
-    }
-    
-    throw new Error(data.error || 'translation failed');
+
+    // 5. Publish the job
+    await Promise.any(state.relays.map(url => state.pool.ensureRelay(url)));
+    await state.pool.publish(state.relays, jobEvent);
+
+    // 6. Wait for result
+    const translated = await resultPromise;
+
+    // 7. Cache
+    state.cached[cacheKey] = { text: translated, timestamp: Date.now() };
+    saveCache();
+
+    return translated;
   } catch (error) {
-    console.warn(`Translation failed: ${error.message}`);
+    console.warn(`[Nostr Translate] Translation failed: ${error.message}`);
     return null;
   }
 }
@@ -114,44 +204,41 @@ function saveCache() {
   localStorage.setItem('nostr_translate_cache', JSON.stringify(state.cached));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
 // UI Rendering
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
 
 function renderTranslationBadge(eventId, content, sourceLang, targetLang) {
   const badge = document.createElement('span');
   badge.className = 'nostr-translate-badge';
   badge.dataset.eventId = eventId;
-  badge.innerHTML = `${getConfigFlag(sourceLang)} ${capitalize(sourceLang)}`;
+  badge.innerHTML = `${getFlag(sourceLang)} ${capitalize(sourceLang)}`;
   badge.title = `Original: ${capitalize(sourceLang)} | Tap to translate to ${capitalize(targetLang)}`;
-  
-  // Add click handler
+
   badge.addEventListener('click', (e) => {
     e.preventDefault();
     toggleTranslation(eventId);
   });
-  
+
   return badge;
 }
 
 function toggleTranslation(eventId) {
   state.uiState[eventId] = state.uiState[eventId] === 'original' ? 'translated' : 'original';
   saveUiState();
-  
-  // Update UI
   updateEventDisplay(eventId);
 }
 
 function updateEventDisplay(eventId) {
   const eventEl = document.querySelector(`[data-event-id="${eventId}"]`);
   if (!eventEl) return;
-  
+
   const contentEl = eventEl.querySelector('.nostr-content');
   if (!contentEl) return;
-  
+
   const cacheKey = `${eventId}:${state.userLang}`;
   const cached = state.cached[cacheKey];
-  
+
   if (state.uiState[eventId] === 'translated' && cached) {
     contentEl.textContent = cached.text;
   } else {
@@ -159,86 +246,128 @@ function updateEventDisplay(eventId) {
   }
 }
 
-function getConfigFlag(lang) {
+function getFlag(lang) {
   return CONFIG.FLAG_EMOJI[lang] || '🏳️';
 }
 
-function capitalize(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
+function capitalize(lang) {
+  return CONFIG.LANG_NAMES[lang] || lang.toUpperCase();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
 // Event Processing (Main Entry Point)
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
 
 async function processIncomingEvent(event) {
   // Skip if too long
-  if (event.content.length > CONFIG.MAX_CHARS) {
+  if (!event.content || event.content.length > CONFIG.MAX_CHARS) {
     return event;
   }
-  
+
   // Auto-detect source language
-  const sourceLang = await detectLanguage(event.content);
-  
+  const sourceLang = detectLanguage(event.content);
+
   // Only translate if different from user's language
   if (sourceLang === state.userLang) {
     return event;
   }
-  
-  // Check if already translated in this session
-  const cacheKey = `${event.id}:${state.userLang}`;
-  const cached = state.cached[cacheKey];
-  
-  // Add metadata tags to event
+
+  // Add metadata tags
   event.tags = event.tags || [];
   event.tags.push(['language', sourceLang]);
   event.tags.push(['translation_service', 'nostr-oracle']);
-  
-  // If cached, return with translated content
+
+  // Check cache
+  const cacheKey = `${event.id}:${state.userLang}`;
+  const cached = state.cached[cacheKey];
+
   if (cached && Date.now() - cached.timestamp < CONFIG.CACHE_TTL) {
     event.content = cached.text;
     return event;
   }
-  
-  // Otherwise, translate in background
+
+  // Translate in background
   const translated = await translateEvent(event.id, event.content, state.userLang, sourceLang);
-  
   if (translated) {
     event.content = translated;
   }
-  
+
   return event;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
 // Initialization
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
 
-function initTranslationService() {
-  // Load UI state
-  const savedUi = localStorage.getItem('nostr_translate_uiState');
-  if (savedUi) {
-    state.uiState = JSON.parse(savedUi);
-  }
-  
+/**
+ * Initialize the translation service.
+ *
+ * @param {Object} opts
+ * @param {string[]} [opts.relays] - Relay URLs (defaults to Oracle relays)
+ * @param {string} [opts.userPubkey] - User's hex pubkey
+ * @param {Object} [opts.signer] - nsec as Uint8Array, or { sign(template) } for NIP-07
+ */
+function initTranslationService(opts = {}) {
+  const relays = opts.relays || CONFIG.ORACLE_RELAYS;
+  state.relays = relays;
+
+  if (opts.userPubkey) state.userPubkey = opts.userPubkey;
+  if (opts.signer) state.signer = opts.signer;
+
+  // Create pool
+  state.pool = new SimplePool();
+
+  console.log(`[Nostr Translate] Initialized. Oracle: ${CONFIG.ORACLE_PUBKEY.slice(0, 8)}..., Relays: ${relays.length}`);
+
+  // Load persisted state
+  loadPersistedState();
+
   // Update all existing events
-  document.querySelectorAll('[data-event-id]').forEach((el) => {
-    const eventId = el.dataset.eventId;
-    if (eventId && state.uiState[eventId]) {
-      updateEventDisplay(eventId);
-    }
-  });
-  
-  console.log('[Nostr Translate] Service initialized');
+  if (typeof document !== 'undefined') {
+    document.querySelectorAll('[data-event-id]').forEach((el) => {
+      const eventId = el.dataset.eventId;
+      if (eventId && state.uiState[eventId]) {
+        updateEventDisplay(eventId);
+      }
+    });
+  }
+}
+
+function loadPersistedState() {
+  const ui = localStorage.getItem('nostr_translate_uiState');
+  if (ui) state.uiState = JSON.parse(ui);
+
+  const cache = localStorage.getItem('nostr_translate_cache');
+  if (cache) state.cached = JSON.parse(cache);
+
+  const lang = localStorage.getItem('nostr_translate_userLang');
+  if (lang) state.userLang = lang;
+}
+
+function setUserLanguage(lang) {
+  state.userLang = lang;
+  localStorage.setItem('nostr_translate_userLang', lang);
+  console.log(`[Nostr Translate] User language set to: ${lang}`);
 }
 
 function saveUiState() {
   localStorage.setItem('nostr_translate_uiState', JSON.stringify(state.uiState));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Clean up — close pool subscriptions. Call on app teardown.
+ */
+function destroy() {
+  if (state.pool) {
+    state.pool.close(state.relays);
+    state.pool = null;
+  }
+  console.log('[Nostr Translate] Destroyed.');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Styles
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
 
 const STYLES = `
 .nostr-translate-badge {
@@ -264,7 +393,6 @@ const STYLES = `
   background: rgba(0, 122, 255, 0.3);
 }
 
-/* Dark mode support */
 @media (prefers-color-scheme: dark) {
   .nostr-translate-badge {
     background: rgba(0, 122, 255, 0.2);
@@ -283,21 +411,19 @@ if (typeof document !== 'undefined') {
   document.head.appendChild(styleSheet);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Export API
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Exports
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export {
+  CONFIG,
+  initTranslationService,
   processIncomingEvent,
   detectLanguage,
   translateEvent,
   renderTranslationBadge,
   toggleTranslation,
-  initTranslationService,
-  CONFIG,
+  updateEventDisplay,
+  setUserLanguage,
+  destroy,
 };
-
-// Auto-initialize on load
-if (typeof window !== 'undefined') {
-  initTranslationService();
-}

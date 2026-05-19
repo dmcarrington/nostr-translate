@@ -1,50 +1,68 @@
 # Inline Translation Service for Nostr
 
-A Twitter-style automatic translation feature for Nostr clients.
+A Twitter-style automatic translation feature for Nostr clients, using the WOPR Oracle DVM via NIP-90 (kind 5002 → kind 6002).
 
 ## Quick Start
 
 ```bash
-pip install langdetect
-
-# Test translation
-python3 -c "
-from translation_service import translate_event
-print(translate_event('Hola mundo', 'en', 'auto'))
-"
+npm install nostr-tools
 ```
+
+```javascript
+import { finalizeEvent, SimplePool } from 'nostr-tools';
+import { initTranslationService, processIncomingEvent, setUserLanguage } from './client-ui.mjs';
+
+// Initialize with your nsec
+initTranslationService({ signer: myNsec });
+setUserLanguage('en');
+
+// Process events
+const translated = await processIncomingEvent(event);
+```
+
+## How It Works
+
+1. **Detect** source language via heuristic character-set matching (no HTTP)
+2. **Publish** kind 5002 NIP-90 translation job to Oracle's relays
+3. **Oracle** translates via Ollama, posts kind 6002 result
+4. **Cache** result locally (24h TTL)
+5. **Display** with language badge in client UI
 
 ## Project Structure
 
 ```
 nostr-translate/
-├── translation_service.py   # Core translation logic
-├── NIP-translation-registration.md  # NIP proposal draft
-└── QUICKSTART.md            # This file
+├── client-ui.mjs              # ESM: Nostr-native translation client
+├── client-ui.js               # UMD: same logic, script-tag compatible
+├── translation-badge.jsx      # React badge component
+├── TranslationBadge.svelte    # Svelte badge component
+├── TranslationBadge.vue       # Vue badge component
+├── CLIENT-INTEGRATION.md      # Integration guide with examples
+├── DEMO.md                    # Demo client setup
+├── NIP-translation-registration.md  # NIP proposal
+└── README.md                  # This file
 ```
 
-## How It Works
+## Protocol
 
-1. **Auto-detect** source language using `langdetect`
-2. **Translate** to user's preferred language using Ollama
-3. **Cache** results (24h TTL)
-4. **Display** with language badge in client UI
+NIP-90 DVM — no HTTP API:
+
+- **Request:** kind 5002 with `["i", <text>, "text"]` and `["param", "lang", <code>]` tags
+- **Response:** kind 6002 with translated text in `.content`, linked via `["e", <job_id>]`
+
+## Dependencies
+
+- `nostr-tools` v2+ (SimplePool, finalizeEvent)
+- WOPR Oracle running with kind 5002 handler (https://github.com/dmcarrington/nostr-oracle)
 
 ## Status
 
-✅ Translation logic implemented
-✅ Cache working
-✅ Oracle announcement updated
-⏳ Client UI component (flag badge, tap-to-toggle)
+✅ Nostr-native translation protocol
+✅ Vanilla JS + ESM clients
+✅ React / Svelte / Vue badge components
+✅ Local caching (24h TTL)
+✅ Heuristic language detection (no HTTP)
 
 ## License
 
 MIT
-
-## Push to GitHub
-
-```bash
-cd ~/.openclaw/workspace/nostr-translate
-git remote set-url origin https://github.com/dmcarrington/nostr-translate.git
-git push -u origin master
-```

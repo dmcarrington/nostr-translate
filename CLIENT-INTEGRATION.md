@@ -1,31 +1,63 @@
 # Client UI Components for Nostr Translation
 
-This directory contains UI components for integrating the translation service into Nostr clients.
+This directory contains UI components for integrating the Nostr-native translation service into Nostr clients.
+
+## Architecture
+
+Translation uses the **WOPR Oracle** via the NIP-90 Data Vending Machine protocol:
+
+1. Client detects source language (heuristic, no HTTP call)
+2. Client publishes **kind 5002** job to Oracle's relays
+3. Oracle translates via Ollama and publishes **kind 6002** result
+4. Client picks up result, caches locally (24h TTL)
+
+No HTTP API. Everything over Nostr.
 
 ## Components
 
 | File | Framework | Description |
 |------|-----------|-------------|
-| `client-ui.js` | Vanilla JS | Core translation logic and badge rendering |
-| `client-ui.mjs` | ESM | ES Module version of `client-ui.js` |
+| `client-ui.mjs` | ESM | Core Nostr-native translation logic + badge rendering |
+| `client-ui.js` | Vanilla JS / UMD | Same logic, script-tag / CommonJS compatible |
 | `TranslationBadge.svelte` | Svelte | Svelte component with click handlers |
 | `TranslationBadge.vue` | Vue.js | Vue component with reactivity |
 | `translation-badge.jsx` | React | React component with hooks |
 
-## Quick Start (Vanilla JS)
+## Quick Start (ESM)
 
 ```javascript
-import { initTranslationService, processIncomingEvent, setUserLanguage } from './client-ui.js';
+import { finalizeEvent, SimplePool } from 'nostr-tools';
+import { initTranslationService, processIncomingEvent, setUserLanguage } from './client-ui.mjs';
 
-// Initialize on app startup
-initTranslationService();
+// Initialize with user's nsec (Uint8Array) or NIP-07 signer
+initTranslationService({
+  signer: myNsec,           // Uint8Array or { sign(template) } for NIP-07
+  userPubkey: myHexPubkey,  // optional, for logging
+});
 
-// Set user's preferred language
-setUserLanguage('en'); // or 'es', 'fr', etc.
+setUserLanguage('en');
 
 // Process each incoming event
 const translatedEvent = await processIncomingEvent(incomingEvent);
 // translatedEvent.content is now in user's language
+```
+
+## Quick Start (Vanilla JS / UMD)
+
+```html
+<script type="module">
+  import { finalizeEvent, SimplePool } from 'https://esm.sh/nostr-tools';
+  
+  window.NostrTranslate.setNostrTools({ finalizeEvent, SimplePool });
+  window.NostrTranslate.initTranslationService({
+    signer: myNsec,
+    userPubkey: myHexPubkey,
+  });
+  window.NostrTranslate.setUserLanguage('en');
+  
+  // translate events:
+  const translated = await window.NostrTranslate.processIncomingEvent(event);
+</script>
 ```
 
 ## React Example
@@ -33,27 +65,28 @@ const translatedEvent = await processIncomingEvent(incomingEvent);
 ```jsx
 import { TranslationBadge } from './translation-badge.jsx';
 import { processIncomingEvent, initTranslationService } from './client-ui.mjs';
+import { finalizeEvent, SimplePool } from 'nostr-tools';
 
 function NostrApp() {
   const [uiState, setUiState] = useState({});
   const [userLang, setUserLang] = useState('en');
-  
+
   useEffect(() => {
-    initTranslationService();
+    initTranslationService({ signer: myNsec });
   }, []);
-  
+
   async function handleEvent(event) {
     const translated = await processIncomingEvent(event);
     setEvents(prev => [...prev, translated]);
   }
-  
+
   function toggleTranslation(eventId) {
     setUiState(prev => ({
       ...prev,
       [eventId]: prev[eventId] === 'original' ? 'translated' : 'original',
     }));
   }
-  
+
   return events.map(event => (
     <div key={event.id} data-event-id={event.id}>
       <p>{event.content}</p>
@@ -76,22 +109,24 @@ function NostrApp() {
 ```svelte
 <script>
   import { TranslationBadge } from './TranslationBadge.svelte';
-  import { processIncomingEvent, initTranslationService, setUserLanguage } from './client-ui.js';
-  
+  import { processIncomingEvent, initTranslationService, setUserLanguage } from './client-ui.mjs';
+  import { finalizeEvent, SimplePool } from 'nostr-tools';
+
   let events = [];
   let userLang = 'en';
   let uiState = {};
-  
-  initTranslationService();
+
+  initTranslationService({ signer: myNsec });
   setUserLanguage(userLang);
-  
+
   async function loadEvents() {
     const eventsFromRelay = await fetchEvents();
     const translated = await Promise.all(eventsFromRelay.map(processIncomingEvent));
     events = translated;
   }
-  
-  function toggleTranslation(eventId) {
+
+  function toggleTranslation(event) {
+    const eventId = event.detail.eventId;
     uiState[eventId] = uiState[eventId] === 'original' ? 'translated' : 'original';
   }
 </script>
@@ -100,12 +135,12 @@ function NostrApp() {
   <div data-event-id={event.id}>
     <p>{event.content}</p>
     {#if event.tags?.find(t => t[0] === 'language')?.[1] !== userLang}
-      <TranslationBadge 
+      <TranslationBadge
         eventId={event.id}
         sourceLang={event.tags?.find(t => t[0] === 'language')?.[1] || 'en'}
         targetLang={userLang}
         isTranslated={uiState[event.id] === 'translated'}
-        on:toggle={() => toggleTranslation(event.id)}
+        on:toggle={toggleTranslation}
       />
     {/if}
   </div>
@@ -131,19 +166,16 @@ function NostrApp() {
 
 <script>
 import { TranslationBadge } from './TranslationBadge.vue';
-import { processIncomingEvent, initTranslationService, setUserLanguage } from './client-ui.js';
+import { processIncomingEvent, initTranslationService, setUserLanguage } from './client-ui.mjs';
+import { finalizeEvent, SimplePool } from 'nostr-tools';
 
 export default {
   components: { TranslationBadge },
   data() {
-    return {
-      events: [],
-      userLang: 'en',
-      uiState: {},
-    };
+    return { events: [], userLang: 'en', uiState: {} };
   },
   async mounted() {
-    initTranslationService();
+    initTranslationService({ signer: myNsec });
     setUserLanguage(this.userLang);
     const eventsFromRelay = await fetchEvents();
     const translated = await Promise.all(eventsFromRelay.map(processIncomingEvent));
@@ -154,8 +186,8 @@ export default {
       return event.tags?.find(t => t[0] === 'language')?.[1] || 'en';
     },
     toggleTranslation(eventId) {
-      this.uiState[eventId] = this.uiState[eventId] === 'original' 
-        ? 'translated' 
+      this.uiState[eventId] = this.uiState[eventId] === 'original'
+        ? 'translated'
         : 'original';
     },
   },
@@ -163,33 +195,28 @@ export default {
 </script>
 ```
 
-## Styling Notes
-
-All components use the same CSS class: `nostr-translate-badge`
-
-### Dark Mode Support
-
-The badge automatically adjusts for dark mode:
-- Light mode: `rgba(0, 122, 255, 0.1)` background
-- Dark mode: `rgba(0, 122, 255, 0.2)` background
-
-You can override in your app's global CSS:
-
-```css
-.nostr-translate-badge {
-  /* Your custom styles here */
-}
-```
-
 ## API Reference
+
+### `initTranslationService(opts)`
+
+Initialize the service. Must be called before translation.
+
+```javascript
+initTranslationService({
+  signer: myNsec,           // required — Uint8Array or NIP-07 { sign() }
+  userPubkey: myHexPubkey,  // optional
+  relays: [...],            // optional, defaults to Oracle relay set
+});
+```
 
 ### `processIncomingEvent(event)`
 
 Processes an incoming Nostr event:
-- Auto-detects source language
-- Translates to user's language if different
+- Auto-detects source language (heuristic, no HTTP call)
+- If different from user's language, publishes kind 5002 and waits for kind 6002
+- Caches result locally
 - Adds metadata tags: `['language', sourceLang]`, `['translation_service', 'nostr-oracle']`
-- Returns modified event
+- Returns modified event (with translated content)
 
 ### `setUserLanguage(lang)`
 
@@ -198,48 +225,48 @@ Sets the user's preferred language. Accepts ISO 639-1 codes:
 
 ### `detectLanguage(text)`
 
-Auto-detects the language of the given text. Uses simple heuristics (can be replaced with API call).
+Auto-detects language via heuristic character set matching. No network call.
 
 ### `translateEvent(eventId, text, targetLang, sourceLang)`
 
-Calls the translation API and caches the result. Returns the translated text.
+Publishes kind 5002 job and returns translated text (or null on failure).
 
 ### `renderTranslationBadge(eventId, content, sourceLang, targetLang)`
 
-Renders a translation badge element. Returns a DOM node.
+Creates a DOM badge element for displaying language and toggling translation.
 
-## Caching
+### `destroy()`
 
-Translations are cached in `localStorage` under the key `nostr_translate_cache`:
-- Key format: `{eventId}:{targetLang}`
-- TTL: 24 hours
-
-To clear the cache:
-```javascript
-localStorage.removeItem('nostr_translate_cache');
-```
+Cleans up relay connections. Call on app teardown.
 
 ## Configuration
 
-Edit `CONFIG` in `client-ui.js`:
+The Oracle pubkey and relay list are in `CONFIG` within each client file:
 
 ```javascript
 const CONFIG = {
-  TRANSLATION_API: 'https://nostr-oracle.example.com/api/v1/translate',
-  CACHE_TTL: 24 * 60 * 60 * 1000,
-  MAX_CHARS: 500, // Don't translate if content exceeds this
-  FLAG_EMOJI: { /* ... */ },
+  ORACLE_PUBKEY: '7e3d8c8f...',     // WOPR Oracle hex pubkey
+  ORACLE_RELAYS: [...],             // Relays the Oracle listens on
+  RESULT_TIMEOUT: 15_000,           // Timeout waiting for kind 6002 (ms)
+  CACHE_TTL: 24 * 60 * 60 * 1000,   // 24 hours
+  MAX_CHARS: 500,                   // Don't translate longer content
 };
 ```
 
+## Caching
+
+Translations are cached in `localStorage` under `nostr_translate_cache`:
+- Key format: `{eventId}:{targetLang}`
+- TTL: 24 hours
+
+To clear: `localStorage.removeItem('nostr_translate_cache')`
+
 ## Status
 
-✅ Vanilla JS client
+✅ Nostr-native translation (kind 5002 → kind 6002)
+✅ Vanilla JS client (UMD + ESM)
 ✅ React component
 ✅ Svelte component
 ✅ Vue component
-⏳ Integration with specific Nostr clients (Damus, Amethyst, etc.)
-
-## License
-
-MIT
+✅ Local caching
+✅ Heuristic language detection (no HTTP)

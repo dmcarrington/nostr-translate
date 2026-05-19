@@ -17,15 +17,8 @@
 
 import React, { useEffect, useState } from 'react';
 
-const CONFIG = {
-  TRANSLATION_API: 'https://nostr-oracle.example.com/api/v1/translate',
-  CACHE_TTL: 24 * 60 * 60 * 1000,
-  FLAG_EMOJI: {
-    'en': '🇬🇧', 'es': '🇪🇸', 'fr': '🇫🇷', 'de': '🇩🇪', 'it': '🇮🇹',
-    'pt': '🇵🇹', 'ru': '🇷🇺', 'zh': '🇨🇳', 'ja': '🇯🇵', 'ko': '🇰🇷',
-    'ar': '🇸🇦', 'hi': '🇮🇳',
-  },
-};
+// Translation happens via the Nostr-native client (client-ui.mjs / client-ui.js).
+// This component only renders the toggle badge UI.
 
 const langNames = {
   'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German',
@@ -34,7 +27,12 @@ const langNames = {
 };
 
 function getFlag(lang) {
-  return CONFIG.FLAG_EMOJI[lang] || '🏳️';
+  const flags = {
+    'en': '🇬🇧', 'es': '🇪🇸', 'fr': '🇫🇷', 'de': '🇩🇪', 'it': '🇮🇹',
+    'pt': '🇵🇹', 'ru': '🇷🇺', 'zh': '🇨🇳', 'ja': '🇯🇵', 'ko': '🇰🇷',
+    'ar': '🇸🇦', 'hi': '🇮🇳',
+  };
+  return flags[lang] || '🏳️';
 }
 
 function capitalize(str) {
