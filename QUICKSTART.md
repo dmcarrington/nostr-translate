@@ -45,7 +45,8 @@ const translated = await processIncomingEvent(event);
 
 - `nostr-tools` v2+ (SimplePool, finalizeEvent)
 - User nsec or NIP-07 signer (for signing kind 5002 jobs)
-- WOPR Oracle running and connected to the same relay set
+- Any NIP-90 DVM that handles kind 5002 translation jobs (e.g. [WOPR Oracle](https://github.com/dmcarrington/nostr-oracle))
+- Configure the Oracle's pubkey and relay list in `CONFIG` at the top of the client file
 
 ## Quick Test
 

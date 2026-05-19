@@ -1,6 +1,6 @@
 # Inline Translation Service for Nostr
 
-A Twitter-style automatic translation feature for Nostr clients, using the WOPR Oracle DVM via NIP-90 (kind 5002 → kind 6002).
+A Twitter-style automatic translation feature for Nostr clients, using any NIP-90 Data Vending Machine that handles kind 5002 translation jobs (kind 5002 → kind 6002).
 
 ## Quick Start
 
@@ -54,7 +54,9 @@ NIP-90 DVM — no HTTP API:
 ## Dependencies
 
 - `nostr-tools` v2+ (SimplePool, finalizeEvent)
-- WOPR Oracle running with kind 5002 handler (https://github.com/dmcarrington/nostr-oracle)
+- Any NIP-90 DVM that handles kind 5002 translation jobs
+  - Example: [WOPR Oracle](https://github.com/dmcarrington/nostr-oracle) (Ollama-backed, supports 16 languages)
+  - Configure the Oracle's pubkey and relay list in `CONFIG` at the top of `client-ui.mjs` / `client-ui.js`
 
 ## Status
 
