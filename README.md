@@ -32,15 +32,16 @@ const translated = await processIncomingEvent(event);
 
 ```
 nostr-translate/
-├── client-ui.mjs              # ESM: Nostr-native translation client
-├── client-ui.js               # UMD: same logic, script-tag compatible
-├── translation-badge.jsx      # React badge component
-├── TranslationBadge.svelte    # Svelte badge component
-├── TranslationBadge.vue       # Vue badge component
-├── CLIENT-INTEGRATION.md      # Integration guide with examples
-├── DEMO.md                    # Demo client setup
-├── NIP-translation-registration.md  # NIP proposal
-└── README.md                  # This file
+├── client-ui.mjs                       # ESM: Nostr-native translation client
+├── client-ui.js                        # UMD: same logic, script-tag compatible
+├── translation-badge.jsx               # React badge component
+├── TranslationBadge.svelte             # Svelte badge component
+├── TranslationBadge.vue                # Vue badge component
+├── CLIENT-INTEGRATION.md               # Integration guide with examples
+├── DEMO.md                             # Demo client setup
+├── NIP-translation-registration.md     # NIP proposal
+├── QUICKSTART.md                       # Quick start guide
+└── README.md                           # This file
 ```
 
 ## Protocol
@@ -57,11 +58,12 @@ NIP-90 DVM — no HTTP API:
 
 ## Status
 
-✅ Nostr-native translation protocol
-✅ Vanilla JS + ESM clients
+✅ Nostr-native translation protocol (kind 5002 → 6002)
+✅ Vanilla JS + ESM clients (client-ui.js / client-ui.mjs)
 ✅ React / Svelte / Vue badge components
 ✅ Local caching (24h TTL)
-✅ Heuristic language detection (no HTTP)
+✅ Heuristic language detection (no HTTP call needed)
+✅ UMD client uses setNostrTools() injection — no build step required
 
 ## License
 

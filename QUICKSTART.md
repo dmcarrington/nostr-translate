@@ -1,41 +1,60 @@
-# Inline Translation Service for Nostr
+# Quick Start — Nostr Translation Client
 
-A Twitter-style automatic translation feature for Nostr clients.
+Drop-in auto-translation for Nostr client apps.
 
-## Quick Start
+## Install
 
 ```bash
-pip install langdetect
-
-# Test translation
-python3 -c "
-from translation_service import translate_event
-print(translate_event('Hola mundo', 'en', 'auto'))
-"
+npm install nostr-tools
 ```
 
-## Project Structure
+## Usage (ESM)
 
+```javascript
+import { finalizeEvent, SimplePool } from 'nostr-tools';
+import { initTranslationService, processIncomingEvent, setUserLanguage } from './client-ui.mjs';
+
+initTranslationService({ signer: myNsec });
+setUserLanguage('en');
+
+// Wrap each incoming event:
+const translated = await processIncomingEvent(event);
+// event.content is now in user's language (or original if same language)
 ```
-nostr-translate/
-├── translation_service.py   # Core translation logic
-├── NIP-translation-registration.md  # NIP proposal draft
-└── README.md                # This file
+
+## Usage (script tag / UMD)
+
+```html
+<script src="client-ui.js"></script>
+<script type="module">
+  import { finalizeEvent, SimplePool } from 'https://esm.sh/nostr-tools';
+  NostrTranslate.setNostrTools({ finalizeEvent, SimplePool });
+  NostrTranslate.initTranslationService({ signer: myNsec });
+</script>
 ```
 
 ## How It Works
 
-1. **Auto-detect** source language using `langdetect`
-2. **Translate** to user's preferred language using Ollama
-3. **Cache** results (24h TTL)
-4. **Display** with language badge in client UI
+1. **Detect** source language via heuristic character-set matching (no HTTP)
+2. **Publish** kind 5002 NIP-90 translation job to Oracle's relays
+3. **Oracle** translates via Ollama, posts kind 6002 result
+4. **Cache** result locally (24h TTL in localStorage)
+5. **Display** with language badge in client UI
 
-## Status
+## Requirements
 
-✅ Translation logic implemented
-✅ Cache working
-✅ Oracle announcement updated
-⏳ Client UI component (flag badge, tap-to-toggle)
+- `nostr-tools` v2+ (SimplePool, finalizeEvent)
+- User nsec or NIP-07 signer (for signing kind 5002 jobs)
+- WOPR Oracle running and connected to the same relay set
+
+## Quick Test
+
+```javascript
+import { detectLanguage } from './client-ui.mjs';
+console.log(detectLanguage('Hola mundo'));   // → 'es'
+console.log(detectLanguage('Bonjour tout')); // → 'fr'
+console.log(detectLanguage('Hello world'));  // → 'en'
+```
 
 ## License
 
